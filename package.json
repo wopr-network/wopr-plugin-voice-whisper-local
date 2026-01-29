@@ -1,0 +1,37 @@
+{
+  "name": "wopr-plugin-voice-whisper-local",
+  "version": "1.0.0",
+  "description": "Local Whisper STT provider using faster-whisper in Docker",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc -w"
+  },
+  "dependencies": {
+    "dockerode": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/node": "^20.10.0"
+  },
+  "wopr": {
+    "plugin": {
+      "name": "voice-whisper-local",
+      "category": "voice",
+      "type": "stt",
+      "description": "Local STT using faster-whisper (Docker)",
+      "requires": {
+        "docker": ["fedirz/faster-whisper-server:latest"]
+      },
+      "install": [
+        {
+          "kind": "docker",
+          "image": "fedirz/faster-whisper-server",
+          "tag": "latest-cpu",
+          "label": "Pull faster-whisper server image"
+        }
+      ]
+    }
+  }
+}
