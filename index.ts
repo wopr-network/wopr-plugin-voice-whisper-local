@@ -15,14 +15,15 @@
  * ```
  */
 
+import type { WOPRPlugin, WOPRPluginContext } from "wopr";
 import type {
+	STTOptions,
 	STTProvider,
 	STTSession,
-	STTOptions,
 	STTTranscriptChunk,
 	VoicePluginMetadata,
 } from "wopr/voice";
-import type { WOPRPlugin, WOPRPluginContext } from "wopr";
+import { getWebMCPHandlers, getWebMCPToolDeclarations } from "./webmcp.js";
 
 // =============================================================================
 // Configuration
@@ -326,7 +327,14 @@ class WhisperLocalProvider implements STTProvider {
 
 let provider: WhisperLocalProvider | null = null;
 
-const plugin: WOPRPlugin = {
+// Extended with getManifest/getWebMCPHandlers for webui bindPluginLifecycle()
+const plugin: WOPRPlugin & {
+	getManifest(): { webmcpTools: ReturnType<typeof getWebMCPToolDeclarations> };
+	getWebMCPHandlers(): Record<
+		string,
+		(input: Record<string, unknown>) => Promise<unknown>
+	>;
+} = {
 	name: "voice-whisper-local",
 	version: "1.0.0",
 	description: "Local STT using faster-whisper in Docker",
@@ -353,6 +361,16 @@ const plugin: WOPRPlugin = {
 			await provider.shutdown();
 			provider = null;
 		}
+	},
+
+	getManifest() {
+		return { webmcpTools: getWebMCPToolDeclarations() };
+	},
+
+	getWebMCPHandlers() {
+		if (!provider) return {};
+		// DEFAULT_CONFIG.model is the active model; private field not accessible here
+		return getWebMCPHandlers(provider, DEFAULT_CONFIG.model);
 	},
 };
 
