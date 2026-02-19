@@ -160,6 +160,10 @@ class WhisperLocalProvider implements STTProvider {
 		this.serverUrl = `http://localhost:${this.config.port}`;
 	}
 
+	get model(): string {
+		return this.config.model;
+	}
+
 	validateConfig(): void {
 		// Validate model size
 		const validModels = ["tiny", "base", "small", "medium", "large-v3"];
@@ -368,9 +372,18 @@ const plugin: WOPRPlugin & {
 	},
 
 	getWebMCPHandlers() {
-		if (!provider) return {};
-		// DEFAULT_CONFIG.model is the active model; private field not accessible here
-		return getWebMCPHandlers(provider, DEFAULT_CONFIG.model);
+		// Return handlers that resolve `provider` at call time, not at registration
+		// time, so tools are available even if called before init() completes.
+		return {
+			"whisper-local.getStatus": async (input: Record<string, unknown>) => {
+				if (!provider) throw new Error("whisper-local provider not initialized");
+				return getWebMCPHandlers(provider, provider.model)["whisper-local.getStatus"](input);
+			},
+			"whisper-local.listModels": async (input: Record<string, unknown>) => {
+				if (!provider) throw new Error("whisper-local provider not initialized");
+				return getWebMCPHandlers(provider, provider.model)["whisper-local.listModels"](input);
+			},
+		};
 	},
 };
 

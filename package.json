@@ -9,7 +9,7 @@
 		"typescript": "^5.3.0",
 		"vitest": "^4.0.18"
 	},
-	"main": "index.js",
+	"main": "dist/index.js",
 	"name": "@wopr-network/wopr-plugin-voice-whisper-local",
 	"scripts": {
 		"build": "tsc",
