@@ -15,14 +15,15 @@
  * ```
  */
 
+import type { WOPRPlugin, WOPRPluginContext } from "wopr";
 import type {
+	STTOptions,
 	STTProvider,
 	STTSession,
-	STTOptions,
 	STTTranscriptChunk,
 	VoicePluginMetadata,
 } from "wopr/voice";
-import type { WOPRPlugin, WOPRPluginContext } from "wopr";
+import { getWebMCPHandlers, getWebMCPToolDeclarations } from "./webmcp.js";
 
 // =============================================================================
 // Configuration
@@ -157,6 +158,10 @@ class WhisperLocalProvider implements STTProvider {
 	constructor(config: WhisperLocalConfig = {}) {
 		this.config = { ...DEFAULT_CONFIG, ...config };
 		this.serverUrl = `http://localhost:${this.config.port}`;
+	}
+
+	get model(): string {
+		return this.config.model;
 	}
 
 	validateConfig(): void {
@@ -326,7 +331,14 @@ class WhisperLocalProvider implements STTProvider {
 
 let provider: WhisperLocalProvider | null = null;
 
-const plugin: WOPRPlugin = {
+// Extended with getManifest/getWebMCPHandlers for webui bindPluginLifecycle()
+const plugin: WOPRPlugin & {
+	getManifest(): { webmcpTools: ReturnType<typeof getWebMCPToolDeclarations> };
+	getWebMCPHandlers(): Record<
+		string,
+		(input: Record<string, unknown>) => Promise<unknown>
+	>;
+} = {
 	name: "voice-whisper-local",
 	version: "1.0.0",
 	description: "Local STT using faster-whisper in Docker",
@@ -353,6 +365,25 @@ const plugin: WOPRPlugin = {
 			await provider.shutdown();
 			provider = null;
 		}
+	},
+
+	getManifest() {
+		return { webmcpTools: getWebMCPToolDeclarations() };
+	},
+
+	getWebMCPHandlers() {
+		// Return handlers that resolve `provider` at call time, not at registration
+		// time, so tools are available even if called before init() completes.
+		return {
+			"whisper-local.getStatus": async (input: Record<string, unknown>) => {
+				if (!provider) throw new Error("whisper-local provider not initialized");
+				return getWebMCPHandlers(provider, provider.model)["whisper-local.getStatus"](input);
+			},
+			"whisper-local.listModels": async (input: Record<string, unknown>) => {
+				if (!provider) throw new Error("whisper-local provider not initialized");
+				return getWebMCPHandlers(provider, provider.model)["whisper-local.listModels"](input);
+			},
+		};
 	},
 };
 
