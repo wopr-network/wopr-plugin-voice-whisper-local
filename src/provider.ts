@@ -10,6 +10,8 @@ import type {
 } from "./types.js";
 import { DEFAULT_CONFIG, VALID_MODELS } from "./types.js";
 
+const TRANSCRIPTION_TIMEOUT_MS = 60_000;
+
 export class WhisperLocalSession implements STTSession {
   private chunks: Buffer[] = [];
   private ended = false;
@@ -51,18 +53,25 @@ export class WhisperLocalSession implements STTSession {
     formData.append("file", new Blob([new Uint8Array(audioBuffer)], { type: "audio/wav" }), "audio.wav");
     formData.append("language", this.options.language ?? "en");
 
-    const response = await fetch(`${this.serverUrl}/v1/audio/transcriptions`, {
-      method: "POST",
-      body: formData,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TRANSCRIPTION_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${this.serverUrl}/v1/audio/transcriptions`, {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Whisper server error: ${response.status} - ${error}`);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Whisper server error: ${response.status} - ${error}`);
+      }
+
+      const result = (await response.json()) as { text?: string };
+      return result.text ?? "";
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const result = (await response.json()) as { text?: string };
-    return result.text ?? "";
   }
 
   async close(): Promise<void> {
@@ -99,6 +108,7 @@ export class WhisperLocalProvider implements STTProvider {
   private serverUrl: string;
   private containerId?: string;
   private docker?: Docker;
+  private _startingServer: Promise<void> | null = null;
 
   constructor(config: WhisperLocalConfig = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -133,18 +143,25 @@ export class WhisperLocalProvider implements STTProvider {
     formData.append("file", new Blob([new Uint8Array(audio)], { type: "audio/wav" }), "audio.wav");
     formData.append("language", options?.language ?? this.config.language);
 
-    const response = await fetch(`${this.serverUrl}/v1/audio/transcriptions`, {
-      method: "POST",
-      body: formData,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TRANSCRIPTION_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${this.serverUrl}/v1/audio/transcriptions`, {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Whisper server error: ${response.status} - ${error}`);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Whisper server error: ${response.status} - ${error}`);
+      }
+
+      const result = (await response.json()) as { text?: string };
+      return result.text ?? "";
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const result = (await response.json()) as { text?: string };
-    return result.text ?? "";
   }
 
   async healthCheck(): Promise<boolean> {
@@ -173,9 +190,19 @@ export class WhisperLocalProvider implements STTProvider {
   }
 
   private async ensureServerRunning(): Promise<void> {
+    if (this._startingServer) {
+      return this._startingServer;
+    }
     if (await this.healthCheck()) {
       return;
     }
+    this._startingServer = this._doStartServer().finally(() => {
+      this._startingServer = null;
+    });
+    return this._startingServer;
+  }
+
+  private async _doStartServer(): Promise<void> {
     await this.startContainer();
     const maxWait = 60000;
     const startTime = Date.now();
