@@ -1,23 +1,26 @@
 {
   "dependencies": {
+    "@wopr-network/plugin-types": "^0.2.1",
     "dockerode": "^4.0.0"
   },
   "description": "Local Whisper STT provider using faster-whisper in Docker",
   "devDependencies": {
     "@biomejs/biome": "^2.4.3",
+    "@types/dockerode": "^4.0.1",
     "@types/node": "^25.2.3",
     "typescript": "^5.3.0",
     "vitest": "^4.0.18"
   },
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "name": "@wopr-network/wopr-plugin-voice-whisper-local",
   "scripts": {
     "build": "tsc",
-    "check": "biome check . --files-ignore-unknown=true",
-    "dev": "tsc -w",
-    "format": "biome format --write . --files-ignore-unknown=true",
-    "lint": "biome check . --files-ignore-unknown=true",
-    "lint:fix": "biome check --fix . --files-ignore-unknown=true",
+    "check": "biome check src/ tests/ && tsc --noEmit",
+    "dev": "tsc --watch",
+    "format": "biome format --write src/ tests/",
+    "lint": "biome check src/ tests/",
+    "lint:fix": "biome check --fix src/ tests/",
     "prepublishOnly": "npm run build",
     "test": "vitest run"
   },
